@@ -2,10 +2,11 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { PenLine, Eye } from 'lucide-react';
 import html2pdf from 'html2pdf.js';
 import { md, preprocessMarkdown, applyTheme } from './lib/markdown';
+import { markElementIndexes } from './lib/markdownIndexer';
 import { makeWeChatCompatible, cleanInternalAttributes } from './lib/wechatCompat';
 import { THEMES } from './lib/themes';
 import { defaultContent } from './defaultContent';
-import { findImagePosition, selectTextAreaRange, moveCursorToPosition } from './lib/imageSelector';
+import { findImagePosition, selectTextAreaRange } from './lib/imageSelector';
 import { findElementPosition, type ElementLocation } from './lib/markdownLocator';
 import Header from './components/Header';
 import ThemeSelector from './components/ThemeSelector';
@@ -44,9 +45,15 @@ export default function App() {
     };
 
     useEffect(() => {
+        // Core rendering: markdown → HTML → styled HTML
         const rawHtml = md.render(preprocessMarkdown(markdownInput));
         const styledHtml = applyTheme(rawHtml, activeTheme);
-        setRenderedHtml(styledHtml);
+
+        // Enhancement layer: add index markers for click-to-locate
+        // This is decoupled from core rendering logic
+        const indexedHtml = markElementIndexes(styledHtml);
+
+        setRenderedHtml(indexedHtml);
     }, [markdownInput, activeTheme]);
 
     useEffect(() => {
@@ -200,7 +207,7 @@ export default function App() {
         });
     };
 
-    const handleImageClick = useCallback((info: { type: string; index: number; src?: string; alt?: string }) => {
+    const handleImageClick = useCallback((info: { type: string; index: number; src?: string; alt?: string; content?: string }) => {
         if (!editorScrollRef.current) return;
 
         let location: ElementLocation | null = null;
@@ -222,13 +229,8 @@ export default function App() {
         }
 
         if (location) {
-            // Short content: select it; Long content: just move cursor
-            const length = location.end - location.start;
-            if (length <= 200 && info.type !== 'code') {
-                selectTextAreaRange(editorScrollRef.current, location.start, location.end);
-            } else {
-                moveCursorToPosition(editorScrollRef.current, location.start);
-            }
+            // Always select the entire content - consistent user experience
+            selectTextAreaRange(editorScrollRef.current, location.start, location.end);
 
             // Switch to editor panel on mobile
             if (window.innerWidth < 768 && activePanel !== 'editor') {

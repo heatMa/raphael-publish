@@ -230,15 +230,18 @@ export function moveCursorToPosition(
   textarea: HTMLTextAreaElement,
   position: number
 ): void {
+  // Save current scroll position before moving cursor
+  const savedScrollTop = textarea.scrollTop;
+
   textarea.focus();
   textarea.setSelectionRange(position, position);
 
-  // Use the improved scroll logic
-  scrollToPosition(textarea, position);
+  // Restore scroll position immediately to prevent browser's auto-scroll
+  textarea.scrollTop = savedScrollTop;
 }
 
 /**
- * Scroll textarea to show a specific position in the center of viewport
+ * Scroll textarea to show a specific position at the top 1/3 of viewport
  * @param textarea - The textarea element
  * @param position - The character position to scroll to
  */
@@ -251,13 +254,15 @@ function scrollToPosition(textarea: HTMLTextAreaElement, position: number): void
   const paddingTop = parseFloat(getComputedStyle(textarea).paddingTop) || 0;
   const containerHeight = textarea.clientHeight;
 
-  // Calculate cursor position in the total content
-  const totalLines = textarea.value.split('\n').length;
-  const cursorRatio = currentLine / totalLines;
-  const totalScrollHeight = totalLines * lineHeight;
-  const cursorScrollPosition = totalScrollHeight * cursorRatio;
+  // Calculate the target line's scroll position
+  const targetPosition = currentLine * lineHeight - paddingTop + containerHeight / 3;
 
-  // Scroll to center the cursor in the viewport
-  const targetScroll = cursorScrollPosition - (containerHeight / 2) + paddingTop;
-  textarea.scrollTop = Math.max(0, Math.min(targetScroll, textarea.scrollHeight - containerHeight));
+  // Only scroll if the target is outside the current visible area
+  const currentScroll = textarea.scrollTop;
+
+  if (targetPosition < currentScroll || targetPosition > currentScroll + containerHeight - lineHeight * 3) {
+    // Target is outside visible area, scroll to show it at top 1/3
+    textarea.scrollTop = Math.max(0, Math.min(targetPosition, textarea.scrollHeight - containerHeight));
+  }
+  // Otherwise, keep current scroll position (content is already visible)
 }

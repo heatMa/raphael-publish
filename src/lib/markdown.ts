@@ -49,61 +49,8 @@ export function applyTheme(html: string, themeId: string) {
     const parser = new DOMParser();
     const doc = parser.parseFromString(html, 'text/html');
 
-    // Track element positions for click-to-locate feature
-    let headingCount = 0;
-    let paragraphCount = 0;
-    let listCount = 0;
-    let quoteCount = 0;
-    let codeCount = 0;
-    let tableCount = 0;
-    let imageCount = 0;
-    let hrCount = 0;
-
-    // Add location markers to elements
-    doc.querySelectorAll('h1, h2, h3, h4, h5, h6').forEach(el => {
-        el.setAttribute('data-md-type', 'heading');
-        el.setAttribute('data-md-index', String(headingCount++));
-    });
-
-    doc.querySelectorAll('p').forEach(el => {
-        // Only mark paragraphs that are not inside image grids
-        // Image grids are handled separately, so we skip them to avoid duplication
-        const isInGrid = el.classList.contains('image-grid') || el.closest('.image-grid');
-        if (!isInGrid) {
-            el.setAttribute('data-md-type', 'paragraph');
-            el.setAttribute('data-md-index', String(paragraphCount++));
-        }
-    });
-
-    doc.querySelectorAll('ul, ol').forEach(el => {
-        el.setAttribute('data-md-type', 'list');
-        el.setAttribute('data-md-index', String(listCount++));
-    });
-
-    doc.querySelectorAll('blockquote').forEach(el => {
-        el.setAttribute('data-md-type', 'quote');
-        el.setAttribute('data-md-index', String(quoteCount++));
-    });
-
-    doc.querySelectorAll('pre').forEach(el => {
-        el.setAttribute('data-md-type', 'code');
-        el.setAttribute('data-md-index', String(codeCount++));
-    });
-
-    doc.querySelectorAll('table').forEach(el => {
-        el.setAttribute('data-md-type', 'table');
-        el.setAttribute('data-md-index', String(tableCount++));
-    });
-
-    doc.querySelectorAll('img').forEach(el => {
-        el.setAttribute('data-md-type', 'image');
-        el.setAttribute('data-md-index', String(imageCount++));
-    });
-
-    doc.querySelectorAll('hr').forEach(el => {
-        el.setAttribute('data-md-type', 'hr');
-        el.setAttribute('data-md-index', String(hrCount++));
-    });
+    // Note: Indexing is handled separately by markElementIndexes() function
+    // to keep the core rendering logic decoupled from the click-to-locate feature
 
     // Specific inline overrides to prevent headings from uninheriting styles
     const headingInlineOverrides: Record<string, string> = {

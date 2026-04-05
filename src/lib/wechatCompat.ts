@@ -1,21 +1,15 @@
 import { THEMES } from './themes';
+import { stripIndexMarkers } from './markdownIndexer';
 
 /**
  * Remove internal editor attributes from HTML
  * Used when exporting to avoid including internal implementation details
+ *
+ * This is now a thin wrapper around stripIndexMarkers from the indexing layer.
+ * Keeping this function for backward compatibility.
  */
 export function cleanInternalAttributes(html: string): string {
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(html, 'text/html');
-
-    // Remove all internal editor attributes
-    const allElements = doc.querySelectorAll('*');
-    allElements.forEach(el => {
-        el.removeAttribute('data-md-type');
-        el.removeAttribute('data-md-index');
-    });
-
-    return doc.body.innerHTML;
+    return stripIndexMarkers(html);
 }
 
 // Helper to convert images to Base64
@@ -52,6 +46,9 @@ export async function makeWeChatCompatible(html: string, themeId: string): Promi
         el.removeAttribute('data-md-type');
         el.removeAttribute('data-md-index');
     });
+
+    // Note: We manually remove attributes here before DOM manipulation
+    // The stripIndexMarkers() function is also available for HTML string operations
 
     // 1. WeChat prefers <section> as the root wrapper for overall styling
     // If the root is a div, let's wrap or convert it to a section.

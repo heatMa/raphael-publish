@@ -209,4 +209,64 @@ describe('findImagePosition', () => {
             expect(result).toBeNull();
         });
     });
+
+    // 新增：测试相对路径图片（PR 反馈修复）
+    describe('相对路径图片（修复相对路径定位）', () => {
+        test('找到相对路径图片', () => {
+            const markdown = '![测试图片](./images/photo.png)';
+            const result = findImagePosition(markdown, './images/photo.png', '测试图片');
+            expect(result).not.toBeNull();
+            expect(result?.src).toBe('./images/photo.png');
+            expect(result?.alt).toBe('测试图片');
+        });
+
+        test('找到相对路径图片（带父目录）', () => {
+            const markdown = '![图片](../assets/test.jpg)';
+            const result = findImagePosition(markdown, '../assets/test.jpg', '图片');
+            expect(result).not.toBeNull();
+            expect(result?.src).toBe('../assets/test.jpg');
+        });
+
+        test('找到空 alt 的相对路径图片', () => {
+            const markdown = '![](./images/photo.png)';
+            const result = findImagePosition(markdown, './images/photo.png', '');
+            expect(result).not.toBeNull();
+            expect(result?.src).toBe('./images/photo.png');
+            expect(result?.alt).toBe('');
+        });
+
+        test('找到带参数的相对路径图片', () => {
+            const markdown = '![图片](./images/photo.png?w=600)';
+            const result = findImagePosition(markdown, './images/photo.png?w=600', '图片');
+            expect(result).not.toBeNull();
+            expect(result?.src).toBe('./images/photo.png?w=600');
+        });
+
+        test('处理多个相对路径图片', () => {
+            const markdown = `![图片1](./test1.png)
+
+段落
+
+![图片2](./test2.png)`;
+
+            const result1 = findImagePosition(markdown, './test1.png', '图片1');
+            expect(result1).not.toBeNull();
+
+            const result2 = findImagePosition(markdown, './test2.png', '图片2');
+            expect(result2).not.toBeNull();
+            expect(result2!.start).toBeGreaterThan(result1!.start);
+        });
+
+        test('混合相对路径和绝对路径图片', () => {
+            const markdown = `![本地图片](./local.png)
+
+![网络图片](https://example.com/remote.jpg)`;
+
+            const result1 = findImagePosition(markdown, './local.png', '本地图片');
+            expect(result1).not.toBeNull();
+
+            const result2 = findImagePosition(markdown, 'https://example.com/remote.jpg', '网络图片');
+            expect(result2).not.toBeNull();
+        });
+    });
 });

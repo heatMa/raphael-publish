@@ -5,7 +5,7 @@ interface PreviewPanelProps {
     renderedHtml: string;
     deviceWidthClass: string;
     previewDevice: 'mobile' | 'tablet' | 'pc';
-    previewRef: React.RefObject<HTMLDivElement>;
+    previewRef: React.MutableRefObject<HTMLDivElement | null>;
     previewOuterScrollRef: React.RefObject<HTMLDivElement>;
     previewInnerScrollRef: React.RefObject<HTMLDivElement>;
     onPreviewOuterScroll: () => void;
@@ -28,9 +28,16 @@ export default function PreviewPanel({
 }: PreviewPanelProps) {
     const isFramedDevice = previewDevice !== 'pc';
     const containerRef = useRef<HTMLDivElement>(null);
+    const contentRef = useRef<HTMLDivElement>(null);
+
+    // Sync internal contentRef to external previewRef
+    useEffect(() => {
+        if (!previewRef || !contentRef.current) return;
+        previewRef.current = contentRef.current;
+    }, [previewRef]);
 
     useEffect(() => {
-        if (!onImageClick || !containerRef.current) return;
+        if (!onImageClick) return;
 
         const handleElementClick = (e: MouseEvent) => {
             const target = e.target as HTMLElement;
@@ -44,27 +51,41 @@ export default function PreviewPanel({
 
             if (!mdType || mdIndex === null) return;
 
+            // Check if clicked on a link - if so, don't prevent default behavior
+            const clickedLink = target.closest('a') as HTMLAnchorElement;
+            if (clickedLink) {
+                // Link: let it navigate normally
+                return;
+            }
+
+            // Other elements: prevent default and trigger location
             e.preventDefault();
             e.stopPropagation();
 
             // Prepare click info object
-            const clickInfo: { type: string; index: number; src?: string; alt?: string } = {
+            const clickInfo: { type: string; index: number; src?: string; alt?: string; content?: string } = {
                 type: mdType,
                 index: parseInt(mdIndex, 10)
             };
 
+
             // For images, include src and alt
             if (mdType === 'image' && target.tagName === 'IMG') {
                 const img = target as HTMLImageElement;
-                clickInfo.src = img.src || img.getAttribute('src') || '';
+
+                // Use getAttribute('src') to preserve original path (e.g., "./images/photo.png")
+                // img.src returns resolved absolute URL, which won't match markdown text
+                const originalSrc = img.getAttribute('src') || img.src;
+
+                clickInfo.src = originalSrc;
                 clickInfo.alt = img.alt || img.getAttribute('alt') || '';
             }
 
             onImageClick(clickInfo);
         };
 
-        const container = containerRef.current;
-        container.addEventListener('click', handleElementClick);
+        // Use event delegation on document to handle clicks on dynamically rendered content
+        document.addEventListener('click', handleElementClick);
 
         // Add visual feedback style for all clickable elements
         const style = document.createElement('style');
@@ -90,7 +111,7 @@ export default function PreviewPanel({
         document.head.appendChild(style);
 
         return () => {
-            container.removeEventListener('click', handleElementClick);
+            document.removeEventListener('click', handleElementClick);
             document.head.removeChild(style);
         };
     }, [onImageClick]);
@@ -113,7 +134,7 @@ export default function PreviewPanel({
                         onScroll={scrollSyncEnabled ? onPreviewInnerScroll : undefined}
                     >
                         <div
-                            ref={previewRef}
+                            ref={contentRef}
                             data-testid="preview-content"
                             dangerouslySetInnerHTML={{ __html: renderedHtml }}
                             className={`preview-content min-w-full ${previewDevice === 'mobile' ? 'px-1 pt-1 pb-8' : 'px-2 pt-2 pb-10'}`}
@@ -122,7 +143,7 @@ export default function PreviewPanel({
                 ) : (
                     <div className="bg-white rounded-[24px] overflow-hidden shadow-apple-lg transition-all duration-500 ring-1 ring-[#00000008] border-t border-white/50 w-full">
                         <div
-                            ref={previewRef}
+                            ref={contentRef}
                             data-testid="preview-content"
                             dangerouslySetInnerHTML={{ __html: renderedHtml }}
                             className="preview-content min-w-full"
