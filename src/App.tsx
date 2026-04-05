@@ -1,10 +1,13 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { PenLine, Eye } from 'lucide-react';
 import html2pdf from 'html2pdf.js';
 import { md, preprocessMarkdown, applyTheme } from './lib/markdown';
-import { makeWeChatCompatible } from './lib/wechatCompat';
+import { markElementIndexes } from './lib/markdownIndexer';
+import { makeWeChatCompatible, cleanInternalAttributes } from './lib/wechatCompat';
 import { THEMES } from './lib/themes';
 import { defaultContent } from './defaultContent';
+import { findImagePosition, selectTextAreaRange } from './lib/imageSelector';
+import { findElementPosition, type ElementLocation } from './lib/markdownLocator';
 import Header from './components/Header';
 import ThemeSelector from './components/ThemeSelector';
 import Toolbar from './components/Toolbar';
@@ -42,9 +45,15 @@ export default function App() {
     };
 
     useEffect(() => {
+        // Core rendering: markdown → HTML → styled HTML
         const rawHtml = md.render(preprocessMarkdown(markdownInput));
         const styledHtml = applyTheme(rawHtml, activeTheme);
-        setRenderedHtml(styledHtml);
+
+        // Enhancement layer: add index markers for click-to-locate
+        // This is decoupled from core rendering logic
+        const indexedHtml = markElementIndexes(styledHtml);
+
+        setRenderedHtml(indexedHtml);
     }, [markdownInput, activeTheme]);
 
     useEffect(() => {
@@ -158,7 +167,9 @@ export default function App() {
     };
 
     const handleExportHtml = () => {
-        const blob = new Blob([renderedHtml], { type: 'text/html;charset=utf-8' });
+        // Clean internal attributes before exporting
+        const cleanHtml = cleanInternalAttributes(renderedHtml);
+        const blob = new Blob([cleanHtml], { type: 'text/html;charset=utf-8' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
@@ -178,6 +189,14 @@ export default function App() {
             jsPDF: { unit: 'mm' as const, format: 'a4', orientation: 'portrait' as const }
         };
         const clonedElement = element.cloneNode(true) as HTMLElement;
+
+        // Clean internal attributes from cloned element for PDF export
+        const allElements = clonedElement.querySelectorAll('*');
+        allElements.forEach(el => {
+            el.removeAttribute('data-md-type');
+            el.removeAttribute('data-md-index');
+        });
+
         const cloneContainer = document.createElement('div');
         cloneContainer.style.background = document.documentElement.classList.contains('dark') ? '#000000' : '#ffffff';
         cloneContainer.appendChild(clonedElement);
@@ -187,6 +206,38 @@ export default function App() {
             document.body.removeChild(cloneContainer);
         });
     };
+
+    const handleImageClick = useCallback((info: { type: string; index: number; src?: string; alt?: string; content?: string }) => {
+        if (!editorScrollRef.current) return;
+
+        let location: ElementLocation | null = null;
+
+        // Images use specialized positioning
+        if (info.type === 'image' && info.src) {
+            const match = findImagePosition(markdownInput, info.src, info.alt || '');
+            if (match) {
+                // Add type field to match ElementLocation interface
+                location = {
+                    start: match.start,
+                    end: match.end,
+                    type: 'image'
+                };
+            }
+        } else {
+            // Other elements use generic positioning
+            location = findElementPosition(markdownInput, info.type, '', info.index);
+        }
+
+        if (location) {
+            // Always select the entire content - consistent user experience
+            selectTextAreaRange(editorScrollRef.current, location.start, location.end);
+
+            // Switch to editor panel on mobile
+            if (window.innerWidth < 768 && activePanel !== 'editor') {
+                setActivePanel('editor');
+            }
+        }
+    }, [markdownInput, activePanel]);
 
     const deviceWidthClass = () => {
         if (previewDevice === 'mobile') return 'w-[520px] max-w-full';
@@ -281,6 +332,7 @@ export default function App() {
                         onPreviewOuterScroll={handlePreviewOuterScroll}
                         onPreviewInnerScroll={handlePreviewInnerScroll}
                         scrollSyncEnabled={scrollSyncEnabled}
+                        onImageClick={handleImageClick}
                     />
                 </div>
             </main>

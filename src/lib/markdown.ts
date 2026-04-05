@@ -49,6 +49,9 @@ export function applyTheme(html: string, themeId: string) {
     const parser = new DOMParser();
     const doc = parser.parseFromString(html, 'text/html');
 
+    // Note: Indexing is handled separately by markElementIndexes() function
+    // to keep the core rendering logic decoupled from the click-to-locate feature
+
     // Specific inline overrides to prevent headings from uninheriting styles
     const headingInlineOverrides: Record<string, string> = {
         strong: 'font-weight: 700; color: inherit !important; background-color: transparent !important;',
@@ -72,45 +75,80 @@ export function applyTheme(html: string, themeId: string) {
         return null;
     };
 
-    // Merge consecutive single-image paragraphs (same parent) into pair-wise side-by-side grids.
+    // Check if a paragraph contains only images (for base64 images or multiple images in one paragraph)
+    const isImageOnlyParagraph = (p: HTMLParagraphElement): boolean => {
+        const children = Array.from(p.childNodes).filter(n =>
+            !(n.nodeType === Node.TEXT_NODE && !(n.textContent || '').trim()) &&
+            !(n.nodeType === Node.ELEMENT_NODE && (n as Element).tagName === 'BR')
+        );
+        if (children.length === 0) return false;
+        return children.every(n =>
+            n.nodeName === 'IMG' ||
+            (n.nodeName === 'A' && n.childNodes.length === 1 && n.childNodes[0].nodeName === 'IMG')
+        );
+    };
+
+    // Merge consecutive image-only paragraphs (same parent) into pair-wise side-by-side grids.
     const paragraphSnapshot = Array.from(doc.querySelectorAll('p'));
+    const processed = new Set<HTMLParagraphElement>();
+
     for (const paragraph of paragraphSnapshot) {
-        if (!paragraph.isConnected) continue;
-        const parent = paragraph.parentElement;
-        if (!parent) continue;
-        if (!getSingleImageNode(paragraph)) continue;
+        if (!paragraph.isConnected || processed.has(paragraph)) continue;
+        if (!getSingleImageNode(paragraph) && !isImageOnlyParagraph(paragraph)) continue;
 
         const run: HTMLParagraphElement[] = [paragraph];
+        processed.add(paragraph);
+
         let cursor = paragraph.nextElementSibling;
         while (cursor && cursor.tagName === 'P') {
             const p = cursor as HTMLParagraphElement;
-            if (!getSingleImageNode(p)) break;
+            if (!getSingleImageNode(p) && !isImageOnlyParagraph(p)) break;
             run.push(p);
+            processed.add(p);
             cursor = p.nextElementSibling;
         }
 
         if (run.length < 2) continue;
 
-        // Pair images two by two, leaving an odd tail image as-is.
-        for (let i = 0; i + 1 < run.length; i += 2) {
-            const first = run[i];
-            const second = run[i + 1];
-            if (!first.isConnected || !second.isConnected) continue;
+        // Collect all images from the run
+        const allImages: HTMLElement[] = [];
+        run.forEach(p => {
+            if (getSingleImageNode(p)) {
+                const img = getSingleImageNode(p);
+                if (img) allImages.push(img);
+            } else if (isImageOnlyParagraph(p)) {
+                const images = p.querySelectorAll('img');
+                images.forEach(img => allImages.push(img as HTMLElement));
+            }
+        });
 
-            const firstImageNode = getSingleImageNode(first);
-            const secondImageNode = getSingleImageNode(second);
-            if (!firstImageNode || !secondImageNode) continue;
+        // Create grid paragraphs with 2 images each
+        const firstParagraph = run[0];
+        let lastInserted: HTMLElement | null = null;
 
+        for (let i = 0; i < allImages.length; i += 2) {
             const gridParagraph = doc.createElement('p');
             gridParagraph.classList.add('image-grid');
             gridParagraph.setAttribute('style', 'display: flex; justify-content: center; gap: 8px; margin: 24px 0; align-items: flex-start;');
-            gridParagraph.appendChild(firstImageNode);
-            gridParagraph.appendChild(secondImageNode);
 
-            first.before(gridParagraph);
-            first.remove();
-            second.remove();
+            gridParagraph.appendChild(allImages[i]);
+            if (i + 1 < allImages.length) {
+                gridParagraph.appendChild(allImages[i + 1]);
+            }
+
+            if (i === 0) {
+                firstParagraph.before(gridParagraph);
+                lastInserted = gridParagraph;
+            } else if (lastInserted) {
+                lastInserted.after(gridParagraph);
+                lastInserted = gridParagraph;
+            }
         }
+
+        // Remove original paragraphs
+        run.forEach(p => {
+            if (p.isConnected) p.remove();
+        });
     }
 
     // Process image grids
