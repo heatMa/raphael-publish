@@ -1,6 +1,9 @@
 import { uploadToImgbb } from './imageRehost';
 import { stripIndexMarkers } from './markdownIndexer';
 
+// Cache base64 → imgbb URL within the page session to avoid re-uploading the same image.
+const imgbbCache = new Map<string, string>();
+
 /**
  * Transform rendered HTML for paste into Zhihu's article editor.
  *
@@ -61,7 +64,9 @@ export async function makeZhihuCompatible(html: string, imgbbApiKey: string): Pr
             const src = img.getAttribute('src') || '';
             if (!src.startsWith('data:')) return;
             try {
-                const publicUrl = await uploadToImgbb(src, imgbbApiKey);
+                const cached = imgbbCache.get(src);
+                const publicUrl = cached ?? await uploadToImgbb(src, imgbbApiKey);
+                if (!cached) imgbbCache.set(src, publicUrl);
                 img.setAttribute('src', publicUrl);
             } catch (e) {
                 console.error('Failed to re-host image to imgbb:', e);
