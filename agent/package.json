@@ -5,11 +5,14 @@
   "type": "module",
   "scripts": {
     "agent": "tsx src/index.ts",
-    "login:zhihu": "tsx src/index.ts login zhihu"
+    "login:zhihu": "tsx src/index.ts login zhihu",
+    "login:wechat": "tsx src/index.ts login wechat"
   },
   "dependencies": {
+    "@types/jsdom": "^28.0.1",
     "commander": "^12.1.0",
     "dotenv": "^16.4.5",
+    "jsdom": "^29.0.1",
     "playwright": "^1.49.0"
   },
   "devDependencies": {

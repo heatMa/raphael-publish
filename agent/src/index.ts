@@ -5,9 +5,10 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { readFeishuDocument } from './feishu.js';
 import { makeZhihuCompatibleHtml } from './zhihuTransform.js';
+import { makeWeChatCompatibleHtml } from './wechatTransform.js';
 import { loginZhihu, publishToZhihu } from './publishers/zhihu.js';
+import { loginWechat, publishToWechat } from './publishers/wechat.js';
 
-// Load .env from agent/ directory
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 config({ path: path.join(__dirname, '..', '.env') });
 
@@ -20,47 +21,68 @@ function requireEnv(key: string): string {
     return val;
 }
 
-// ─── login command ────────────────────────────────────────────────────────────
+// ─── login ────────────────────────────────────────────────────────────────────
 
 program
     .command('login <platform>')
-    .description('Log in to a publishing platform (saves session)')
+    .description('Log in to a publishing platform and save session (zhihu | wechat)')
     .action(async (platform: string) => {
         if (platform === 'zhihu') {
             await loginZhihu();
+        } else if (platform === 'wechat') {
+            await loginWechat();
         } else {
-            console.error(`Unknown platform: ${platform}. Supported: zhihu`);
+            console.error(`Unknown platform: ${platform}. Supported: zhihu, wechat`);
             process.exit(1);
         }
     });
 
-// ─── publish command ──────────────────────────────────────────────────────────
+// ─── publish ──────────────────────────────────────────────────────────────────
 
 program
     .command('publish')
-    .description('Publish a Feishu document to Zhihu')
+    .description('Publish a Feishu document to one or more platforms')
     .requiredOption('--doc <url>', 'Feishu document or wiki URL')
+    .option('--to <platforms>', 'Comma-separated platforms: zhihu, wechat (default: zhihu)', 'zhihu')
     .option('--publish', 'Publish immediately instead of saving as draft', false)
-    .action(async (opts: { doc: string; publish: boolean }) => {
+    .action(async (opts: { doc: string; to: string; publish: boolean }) => {
         const appId = requireEnv('FEISHU_APP_ID');
         const appSecret = requireEnv('FEISHU_APP_SECRET');
         const imgbbApiKey = requireEnv('IMGBB_API_KEY');
 
-        console.log('Step 1/3: Reading Feishu document...');
+        const platforms = opts.to.split(',').map(s => s.trim().toLowerCase());
+        const toZhihu = platforms.includes('zhihu');
+        const toWechat = platforms.includes('wechat');
+
+        if (!toZhihu && !toWechat) {
+            console.error('Unknown platforms. Use --to zhihu, --to wechat, or --to zhihu,wechat');
+            process.exit(1);
+        }
+
+        console.log(`\nPublishing to: ${platforms.join(', ')}`);
+        console.log('─'.repeat(40));
+
+        // Step 1: Read Feishu document (shared)
+        console.log('\n[1/3] Reading Feishu document...');
         const doc = await readFeishuDocument(opts.doc, appId, appSecret);
         console.log(`Title: ${doc.title}`);
 
-        console.log('Step 2/3: Transforming HTML for Zhihu...');
-        const zhihuHtml = await makeZhihuCompatibleHtml(doc.html, imgbbApiKey);
+        // Step 2 & 3: Transform + publish per platform
+        if (toZhihu) {
+            console.log('\n[Zhihu] Transforming HTML...');
+            const zhihuHtml = await makeZhihuCompatibleHtml(doc.html, imgbbApiKey);
+            console.log('[Zhihu] Publishing...');
+            await publishToZhihu({ title: doc.title, html: zhihuHtml, publish: opts.publish });
+        }
 
-        console.log('Step 3/3: Publishing to Zhihu...');
-        await publishToZhihu({
-            title: doc.title,
-            html: zhihuHtml,
-            publish: opts.publish,
-        });
+        if (toWechat) {
+            console.log('\n[WeChat] Transforming HTML...');
+            const wechatHtml = makeWeChatCompatibleHtml(doc.html);
+            console.log('[WeChat] Publishing...');
+            await publishToWechat({ title: doc.title, html: wechatHtml, publish: opts.publish });
+        }
 
-        console.log('\nDone!');
+        console.log('\nAll done!');
     });
 
 program.parse();
