@@ -16,6 +16,7 @@ import fs from 'fs';
 
 const PROFILE_DIR = path.join(os.homedir(), '.raphael-agent', 'wechat-profile');
 const MP_HOME = 'https://mp.weixin.qq.com';
+const MODIFIER_KEY = process.platform === 'darwin' ? 'Meta' : 'Control';
 
 // ─── Session management ───────────────────────────────────────────────────────
 
@@ -91,7 +92,7 @@ export async function publishToWechat(opts: WeChatPublishOptions): Promise<void>
             console.log('文章已提交发布！');
         } else {
             // WeChat auto-saves; trigger explicit save just in case
-            await page.keyboard.press('Control+s');
+            await page.keyboard.press(`${MODIFIER_KEY}+s`);
             await page.waitForTimeout(2000);
             console.log('文章已保存为草稿。请在公众号后台 → 草稿箱查看。');
         }
@@ -173,7 +174,7 @@ async function injectHtmlContent(page: Page, html: string): Promise<void> {
     await editor.click();
     await page.waitForTimeout(300);
     // Select all existing content
-    await page.keyboard.press('Control+a');
+    await page.keyboard.press(`${MODIFIER_KEY}+a`);
     await page.waitForTimeout(100);
 
     await page.evaluate((htmlContent) => {

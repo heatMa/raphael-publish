@@ -8,6 +8,7 @@ import { makeZhihuCompatibleHtml } from './zhihuTransform.js';
 import { makeWeChatCompatibleHtml } from './wechatTransform.js';
 import { loginZhihu, publishToZhihu } from './publishers/zhihu.js';
 import { loginWechat, publishToWechat } from './publishers/wechat.js';
+import { THEMES } from '../../src/lib/themes/index.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 config({ path: path.join(__dirname, '..', '.env') });
@@ -19,6 +20,20 @@ function requireEnv(key: string): string {
         process.exit(1);
     }
     return val;
+}
+
+function resolveTheme(themeId: string): string {
+    const normalizedThemeId = themeId.trim().toLowerCase();
+    const isSupported = THEMES.some(theme => theme.id === normalizedThemeId);
+
+    if (!isSupported) {
+        const supportedThemes = THEMES.map(theme => `${theme.id} (${theme.name})`).join(', ');
+        console.error(`Unknown theme: ${themeId}`);
+        console.error(`Supported themes: ${supportedThemes}`);
+        process.exit(1);
+    }
+
+    return normalizedThemeId;
 }
 
 // ─── login ────────────────────────────────────────────────────────────────────
@@ -44,15 +59,16 @@ program
     .description('Publish a Feishu document to one or more platforms')
     .requiredOption('--doc <url>', 'Feishu document or wiki URL')
     .option('--to <platforms>', 'Comma-separated platforms: zhihu, wechat (default: zhihu)', 'zhihu')
+    .option('--theme <themeId>', 'Theme id for WeChat output (for example: apple, claude, github)', 'apple')
     .option('--publish', 'Publish immediately instead of saving as draft', false)
-    .action(async (opts: { doc: string; to: string; publish: boolean }) => {
+    .action(async (opts: { doc: string; to: string; theme: string; publish: boolean }) => {
         const appId = requireEnv('FEISHU_APP_ID');
         const appSecret = requireEnv('FEISHU_APP_SECRET');
-        const imgbbApiKey = requireEnv('IMGBB_API_KEY');
 
         const platforms = opts.to.split(',').map(s => s.trim().toLowerCase());
         const toZhihu = platforms.includes('zhihu');
         const toWechat = platforms.includes('wechat');
+        const themeId = resolveTheme(opts.theme);
 
         if (!toZhihu && !toWechat) {
             console.error('Unknown platforms. Use --to zhihu, --to wechat, or --to zhihu,wechat');
@@ -69,6 +85,7 @@ program
 
         // Step 2 & 3: Transform + publish per platform
         if (toZhihu) {
+            const imgbbApiKey = requireEnv('IMGBB_API_KEY');
             console.log('\n[Zhihu] Transforming HTML...');
             const zhihuHtml = await makeZhihuCompatibleHtml(doc.html, imgbbApiKey);
             console.log('[Zhihu] Publishing...');
@@ -76,8 +93,8 @@ program
         }
 
         if (toWechat) {
-            console.log('\n[WeChat] Transforming HTML...');
-            const wechatHtml = makeWeChatCompatibleHtml(doc.html);
+            console.log(`\n[WeChat] Transforming HTML with theme: ${themeId}...`);
+            const wechatHtml = makeWeChatCompatibleHtml(doc.html, themeId);
             console.log('[WeChat] Publishing...');
             await publishToWechat({ title: doc.title, html: wechatHtml, publish: opts.publish });
         }
