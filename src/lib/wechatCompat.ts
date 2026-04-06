@@ -1,5 +1,6 @@
 import { THEMES } from './themes';
 import { stripIndexMarkers } from './markdownIndexer';
+import { fetchImageAsDataUrl } from './imageRehost';
 
 /**
  * Remove internal editor attributes from HTML
@@ -12,25 +13,6 @@ export function cleanInternalAttributes(html: string): string {
     return stripIndexMarkers(html);
 }
 
-// Helper to convert images to Base64
-async function getBase64Image(imgUrl: string): Promise<string> {
-    try {
-        if (imgUrl.startsWith('data:')) return imgUrl;
-
-        const response = await fetch(imgUrl, { mode: 'cors', cache: 'default' });
-        if (!response.ok) return imgUrl;
-
-        const blob = await response.blob();
-        return new Promise((resolve) => {
-            const reader = new FileReader();
-            reader.onloadend = () => resolve(reader.result as string);
-            reader.onerror = () => resolve(imgUrl);
-            reader.readAsDataURL(blob);
-        });
-    } catch (e) {
-        return imgUrl;
-    }
-}
 
 export async function makeWeChatCompatible(html: string, themeId: string): Promise<string> {
     const parser = new DOMParser();
@@ -188,7 +170,7 @@ export async function makeWeChatCompatible(html: string, themeId: string): Promi
     await Promise.all(imgs.map(async img => {
         const src = img.getAttribute('src');
         if (src && !src.startsWith('data:')) {
-            const base64 = await getBase64Image(src);
+            const base64 = await fetchImageAsDataUrl(src);
             img.setAttribute('src', base64);
         }
     }));

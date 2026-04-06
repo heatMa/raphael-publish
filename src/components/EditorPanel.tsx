@@ -11,8 +11,8 @@ interface EditorPanelProps {
 }
 
 export default function EditorPanel({ markdownInput, onInputChange, editorScrollRef, onEditorScroll, scrollSyncEnabled }: EditorPanelProps) {
-    const onPaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
-        handleSmartPaste(e, onInputChange);
+    const onPaste = async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+        await handleSmartPaste(e, onInputChange);
     };
 
     return (

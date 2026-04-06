@@ -4,6 +4,8 @@ import html2pdf from 'html2pdf.js';
 import { md, preprocessMarkdown, applyTheme } from './lib/markdown';
 import { markElementIndexes } from './lib/markdownIndexer';
 import { makeWeChatCompatible, cleanInternalAttributes } from './lib/wechatCompat';
+import { makeZhihuCompatible } from './lib/zhihuCompat';
+import { getSettings } from './lib/settings';
 import { THEMES } from './lib/themes';
 import { defaultContent } from './defaultContent';
 import { findImagePosition, selectTextAreaRange } from './lib/imageSelector';
@@ -14,6 +16,13 @@ import Toolbar from './components/Toolbar';
 import EditorPanel from './components/EditorPanel';
 import PreviewPanel from './components/PreviewPanel';
 
+async function writeHtmlToClipboard(html: string, plainText: string): Promise<void> {
+    await navigator.clipboard.write([new ClipboardItem({
+        'text/html': new Blob([html], { type: 'text/html' }),
+        'text/plain': new Blob([plainText], { type: 'text/plain' }),
+    })]);
+}
+
 export default function App() {
     const [themeMode, setThemeMode] = useState<'light' | 'dark'>('light');
     const [markdownInput, setMarkdownInput] = useState<string>(defaultContent);
@@ -21,6 +30,8 @@ export default function App() {
     const [activeTheme, setActiveTheme] = useState(THEMES[0].id);
     const [copied, setCopied] = useState(false);
     const [isCopying, setIsCopying] = useState(false);
+    const [copiedZhihu, setCopiedZhihu] = useState(false);
+    const [isCopyingZhihu, setIsCopyingZhihu] = useState(false);
     const [previewDevice, setPreviewDevice] = useState<'mobile' | 'tablet' | 'pc'>('pc');
     const [activePanel, setActivePanel] = useState<'editor' | 'preview'>('editor');
     const [scrollSyncEnabled, setScrollSyncEnabled] = useState(true);
@@ -145,17 +156,8 @@ export default function App() {
         if (!previewRef.current) return;
         setIsCopying(true);
         try {
-            const finalHtmlForCopy = await makeWeChatCompatible(renderedHtml, activeTheme);
-
-            const blob = new Blob([finalHtmlForCopy], { type: 'text/html' });
-            const textBlob = new Blob([previewRef.current.innerText], { type: 'text/plain' });
-
-            const clipboardItem = new ClipboardItem({
-                'text/html': blob,
-                'text/plain': textBlob
-            });
-            await navigator.clipboard.write([clipboardItem]);
-
+            const html = await makeWeChatCompatible(renderedHtml, activeTheme);
+            await writeHtmlToClipboard(html, previewRef.current.innerText);
             setCopied(true);
             setTimeout(() => setCopied(false), 2000);
         } catch (err) {
@@ -166,8 +168,24 @@ export default function App() {
         }
     };
 
+    const handleCopyZhihu = async () => {
+        if (!previewRef.current) return;
+        const { imgbbApiKey } = getSettings();
+        setIsCopyingZhihu(true);
+        try {
+            const html = await makeZhihuCompatible(renderedHtml, imgbbApiKey);
+            await writeHtmlToClipboard(html, previewRef.current.innerText);
+            setCopiedZhihu(true);
+            setTimeout(() => setCopiedZhihu(false), 2000);
+        } catch (err) {
+            console.error('Copy for Zhihu failed', err);
+            alert('复制失败，请检查浏览器剪贴板权限');
+        } finally {
+            setIsCopyingZhihu(false);
+        }
+    };
+
     const handleExportHtml = () => {
-        // Clean internal attributes before exporting
         const cleanHtml = cleanInternalAttributes(renderedHtml);
         const blob = new Blob([cleanHtml], { type: 'text/html;charset=utf-8' });
         const url = URL.createObjectURL(blob);
@@ -287,6 +305,9 @@ export default function App() {
                     onCopy={handleCopy}
                     copied={copied}
                     isCopying={isCopying}
+                    onCopyZhihu={handleCopyZhihu}
+                    copiedZhihu={copiedZhihu}
+                    isCopyingZhihu={isCopyingZhihu}
                     scrollSyncEnabled={scrollSyncEnabled}
                     onToggleScrollSync={() => setScrollSyncEnabled((prev) => !prev)}
                 />
@@ -305,6 +326,9 @@ export default function App() {
                     onCopy={handleCopy}
                     copied={copied}
                     isCopying={isCopying}
+                    onCopyZhihu={handleCopyZhihu}
+                    copiedZhihu={copiedZhihu}
+                    isCopyingZhihu={isCopyingZhihu}
                     scrollSyncEnabled={scrollSyncEnabled}
                     onToggleScrollSync={() => setScrollSyncEnabled((prev) => !prev)}
                 />

@@ -1,6 +1,7 @@
 import TurndownService from 'turndown';
 // @ts-ignore
 import { gfm } from 'turndown-plugin-gfm';
+import { fetchImageAsDataUrl } from './imageRehost';
 
 const turndownService = new TurndownService({
     headingStyle: 'atx',
@@ -98,6 +99,23 @@ function fileToDataUrl(file: File): Promise<string> {
     });
 }
 
+// Fetch all remote <img> src to base64 while Feishu CDN tokens are still valid.
+async function fetchAllImagesAsDataUrls(htmlString: string): Promise<string> {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(htmlString, 'text/html');
+    const imgs = Array.from(doc.querySelectorAll('img'));
+
+    if (imgs.length === 0) return htmlString;
+
+    await Promise.all(imgs.map(async img => {
+        const src = img.getAttribute('src');
+        if (!src || src.startsWith('data:')) return;
+        img.setAttribute('src', await fetchImageAsDataUrl(src));
+    }));
+
+    return doc.body.innerHTML;
+}
+
 export function insertAtSelection(
     textarea: HTMLTextAreaElement,
     insertedText: string,
@@ -116,10 +134,10 @@ export function insertAtSelection(
     }, 0);
 }
 
-export function handleSmartPaste(
+export async function handleSmartPaste(
     e: React.ClipboardEvent<HTMLTextAreaElement>,
     setMarkdownInput: (val: string) => void
-): void {
+): Promise<void> {
     const clipboardData = e.clipboardData;
     if (!clipboardData) return;
 
@@ -173,16 +191,15 @@ export function handleSmartPaste(
         }
 
         e.preventDefault();
+        const textarea = e.currentTarget;
         try {
-            let markdown = turndownService.turndown(htmlData);
+            // Pre-fetch remote images (e.g. Feishu CDN) to base64 while tokens are valid
+            const processedHtml = await fetchAllImagesAsDataUrls(htmlData);
+            let markdown = turndownService.turndown(processedHtml);
             markdown = markdown.replace(/\n{3,}/g, '\n\n');
-
-            const textarea = e.currentTarget;
             insertAtSelection(textarea, markdown, setMarkdownInput);
         } catch (err) {
             console.error('HTML to Markdown conversion failed:', err);
-            // Fallback to text
-            const textarea = e.currentTarget;
             insertAtSelection(textarea, textData, setMarkdownInput);
         }
     } else if (textData && isMarkdown(textData)) {

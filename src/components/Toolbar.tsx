@@ -9,11 +9,14 @@ interface ToolbarProps {
     onCopy: () => void;
     copied: boolean;
     isCopying: boolean;
+    onCopyZhihu: () => void;
+    copiedZhihu: boolean;
+    isCopyingZhihu: boolean;
     scrollSyncEnabled: boolean;
     onToggleScrollSync: () => void;
 }
 
-export default function Toolbar({ previewDevice, onDeviceChange, onExportPdf, onExportHtml, onCopy, copied, isCopying, scrollSyncEnabled, onToggleScrollSync }: ToolbarProps) {
+export default function Toolbar({ previewDevice, onDeviceChange, onExportPdf, onExportHtml, onCopy, copied, isCopying, onCopyZhihu, copiedZhihu, isCopyingZhihu, scrollSyncEnabled, onToggleScrollSync }: ToolbarProps) {
     return (
         <div className="flex items-center justify-between px-4 sm:px-6 py-3 max-w-[1024px]">
             <div className="hidden md:flex bg-[#00000008] dark:bg-[#ffffff10] p-1 rounded-full backdrop-blur-md">
@@ -77,6 +80,19 @@ export default function Toolbar({ previewDevice, onDeviceChange, onExportPdf, on
                 >
                     <Download size={14} />
                     导出 HTML
+                </motion.button>
+
+                <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.96 }}
+                    data-testid="copy-zhihu-button"
+                    onClick={onCopyZhihu}
+                    disabled={isCopyingZhihu}
+                    className={copiedZhihu ? "apple-copy-btn-success apple-copy-btn" : isCopyingZhihu ? "apple-copy-btn opacity-80 cursor-not-allowed" : "apple-export-btn !bg-[#00000008] dark:!bg-[#ffffff10] border-transparent"}
+                >
+                    {copiedZhihu ? <CheckCircle2 size={16} /> : isCopyingZhihu ? <Loader2 className="animate-spin" size={16} /> : <Copy size={14} />}
+                    <span className="hidden sm:inline">{copiedZhihu ? '已复制！请贴往知乎' : isCopyingZhihu ? '处理图片中...' : '复制到知乎'}</span>
+                    <span className="sm:hidden">{copiedZhihu ? '已复制' : isCopyingZhihu ? '处理中...' : '知乎'}</span>
                 </motion.button>
 
                 <motion.button
