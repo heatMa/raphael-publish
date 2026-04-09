@@ -42,6 +42,18 @@ export async function resolveWikiNode(wikiToken: string, token: string): Promise
     return { docId: obj_token, title };
 }
 
+export async function fetchDocumentTitle(docId: string, token: string): Promise<string> {
+    const res = await fetch(`${BASE}/open-apis/docx/v1/documents/${docId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+    });
+    const json = await res.json() as {
+        code: number; msg: string;
+        data?: { document?: { title?: string } };
+    };
+    if (json.code !== 0) throw new Error(`Feishu document get failed: ${json.msg}`);
+    return json.data?.document?.title || 'Untitled';
+}
+
 // ─── Document blocks ─────────────────────────────────────────────────────────
 
 interface TextRun {
@@ -402,7 +414,7 @@ export async function readFeishuDocument(
         const docMatch = urlOrToken.match(/\/docx?\/([A-Za-z0-9]+)/);
         if (!docMatch) throw new Error(`Cannot parse Feishu URL: ${urlOrToken}`);
         docId = docMatch[1];
-        title = 'Untitled';
+        title = await fetchDocumentTitle(docId, accessToken);
     }
 
     console.log(`Reading Feishu document: ${title} (${docId})`);

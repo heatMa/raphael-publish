@@ -6,13 +6,15 @@
   "scripts": {
     "agent": "tsx src/index.ts",
     "login:zhihu": "tsx src/index.ts login zhihu",
-    "login:wechat": "tsx src/index.ts login wechat"
+    "login:wechat": "tsx src/index.ts login wechat",
+    "login:xiaohongshu": "tsx src/index.ts login xiaohongshu",
+    "open:xiaohongshu-profile": "tsx src/index.ts open-profile xiaohongshu"
   },
   "dependencies": {
     "@types/jsdom": "^28.0.1",
     "commander": "^12.1.0",
     "dotenv": "^16.4.5",
-    "jsdom": "^29.0.1",
+    "jsdom": "^28.1.0",
     "playwright": "^1.49.0"
   },
   "devDependencies": {
