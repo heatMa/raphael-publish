@@ -103,6 +103,7 @@ interface Block {
     table?: { cells: string[]; property?: { column_size: number; row_size: number } };
     table_cell?: object;
     divider?: object;
+    quote_container?: object;
     iframe?: { component?: { url?: string } };
 }
 
@@ -187,7 +188,7 @@ const TYPE = {
     IMAGE: 27,
     TABLE: 31,
     TABLE_CELL: 32,
-    IFRAME: 34,
+    QUOTE_CONTAINER: 34,
 } as const;
 
 function escapeHtml(s: string): string {
@@ -280,6 +281,24 @@ async function convertBlock(block: Block, ctx: ConvertContext): Promise<string> 
             return `<blockquote><p>${content}</p></blockquote>`;
         }
 
+        case TYPE.QUOTE_CONTAINER: {
+            const parts = await Promise.all(
+                (block.children || []).map(id => {
+                    const child = blockMap.get(id);
+                    return child ? convertBlock(child, ctx) : Promise.resolve('');
+                })
+            );
+            const inner = parts.join('');
+
+            if (inner.trim()) {
+                return `<blockquote>${inner}</blockquote>`;
+            }
+
+            const url = block.iframe?.component?.url || '';
+            if (!url) return '';
+            return `<p><a href="${escapeHtml(url)}">[内嵌内容: ${escapeHtml(url)}]</a></p>`;
+        }
+
         case TYPE.CODE: {
             const codeElements = block.code?.elements || [];
             const codeText = codeElements.map(el => el.text_run?.content || '').join('');
@@ -325,12 +344,6 @@ async function convertBlock(block: Block, ctx: ConvertContext): Promise<string> 
             }
             html += '</tbody></table>';
             return html;
-        }
-
-        case TYPE.IFRAME: {
-            const url = block.iframe?.component?.url || '';
-            if (!url) return '';
-            return `<p><a href="${escapeHtml(url)}">[内嵌内容: ${escapeHtml(url)}]</a></p>`;
         }
 
         default:
